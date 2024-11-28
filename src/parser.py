@@ -46,48 +46,56 @@ def parse_edi_segment(segment: str, parser: EDIFACTParser) -> Dict[str, Any]:
     Parses a single EDI segment into structured data, handling composite elements
     and release characters.
     """
-    # Handle release characters
-    processed_segment = ''
-    i = 0
-    while i < len(segment):
-        if segment[i] == parser.release_char and i + 1 < len(segment):
-            processed_segment += segment[i + 1]
-            i += 2
-        else:
-            processed_segment += segment[i]
-            i += 1
+    try:
+        # Handle release characters
+        processed_segment = ''
+        i = 0
+        while i < len(segment):
+            if segment[i] == parser.release_char and i + 1 < len(segment):
+                processed_segment += segment[i + 1]
+                i += 2
+            else:
+                processed_segment += segment[i]
+                i += 1
+                
+        # Split into elements
+        elements = processed_segment.split(parser.data_separator)
+        if not elements:
+            raise ValueError("Empty segment")
             
-    # Split into elements
-    elements = processed_segment.split(parser.data_separator)
-    segment_code = elements[0]
-    
-    # Process composite elements
-    processed_elements = []
-    for element in elements[1:]:
-        if parser.component_separator in element:
-            components = element.split(parser.component_separator)
-            processed_elements.append({
-                'value': components[0],
-                'components': components[1:],
-                'position': len(processed_elements) + 1
-            })
-        else:
-            processed_elements.append({
-                'value': element,
-                'components': [],
-                'position': len(processed_elements) + 1
-            })
-    
-    segment_data = {
-        'segment_code': segment_code,
-        'description': get_segment_description(segment_code),
-        'status': determine_segment_status(segment_code),
-        'max_use': determine_max_use(segment_code),
-        'note': '',
-        'elements': processed_elements
-    }
-    
-    return segment_data
+        segment_code = elements[0].strip()
+        if not segment_code:
+            raise ValueError("Invalid segment code")
+        
+        # Process composite elements
+        processed_elements = []
+        for element in elements[1:]:
+            if parser.component_separator in element:
+                components = element.split(parser.component_separator)
+                processed_elements.append({
+                    'value': components[0],
+                    'components': components[1:],
+                    'position': len(processed_elements) + 1
+                })
+            else:
+                processed_elements.append({
+                    'value': element,
+                    'components': [],
+                    'position': len(processed_elements) + 1
+                })
+        
+        segment_data = {
+            'segment_code': segment_code,
+            'description': get_segment_description(segment_code),
+            'status': determine_segment_status(segment_code),
+            'max_use': determine_max_use(segment_code),
+            'note': '',
+            'elements': processed_elements
+        }
+        
+        return segment_data
+    except Exception as e:
+        raise ValueError(f"Error parsing segment: {str(e)}")
 
 def determine_max_use(segment_code: str) -> str:
     """Determines maximum usage of a segment based on EDIFACT rules"""
@@ -246,18 +254,24 @@ def parse_edi_message(content: str) -> List[Dict[str, Any]]:
     """
     Parses a complete EDI message and returns structured data with validation.
     """
-    parser, segments = read_edi_file(content)
-    parsed_data = []
-    
-    for segment in segments:
-        if segment:  # Skip empty segments
-            segment_data = parse_edi_segment(segment, parser)
-            parser.segment_sequence.append(segment_data['segment_code'])
-            hierarchy_data = assign_hierarchy(segment_data)
-            parsed_data.append(hierarchy_data)
-    
-    # Validate envelope structure
-    if not validate_envelope_structure(parsed_data):
-        raise ValueError("Invalid EDIFACT envelope structure")
-    
-    return parsed_data
+    try:
+        parser, segments = read_edi_file(content)
+        parsed_data = []
+        
+        for segment in segments:
+            if segment.strip():  # Skip empty segments
+                try:
+                    segment_data = parse_edi_segment(segment, parser)
+                    parser.segment_sequence.append(segment_data['segment_code'])
+                    hierarchy_data = assign_hierarchy(segment_data)
+                    parsed_data.append(hierarchy_data)
+                except Exception as e:
+                    raise ValueError(f"Error parsing segment '{segment}': {str(e)}")
+        
+        # Validate envelope structure
+        if not validate_envelope_structure(parsed_data):
+            raise ValueError("Invalid EDIFACT envelope structure")
+        
+        return parsed_data
+    except Exception as e:
+        raise ValueError(f"Error processing EDI file: {str(e)}")
