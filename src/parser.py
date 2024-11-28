@@ -41,17 +41,18 @@ def read_edi_file(file_content: str) -> Tuple[EDIFACTParser, List[str]]:
     segments = [s.strip() for s in content.split(parser.segment_terminator) if s.strip()]
     return parser, segments
 
-def parse_edi_segment(segment: str, parser: EDIFACTParser) -> Dict[str, Any]:
+def parse_edi_segment(segment: str, parser: EDIFACTParser, message_type: str = '') -> Dict[str, Any]:
     elements = segment.split(parser.data_separator)
     segment_code = elements[0].strip()
     
     segment_data = {
         'segment_code': segment_code,
         'description': get_segment_description(segment_code),
-        'status': determine_segment_status(segment_code),
+        'status': determine_segment_status(segment_code, message_type),
         'max_use': determine_max_use(segment_code),
         'note': '',
-        'elements': elements[1:] if len(elements) > 1 else []
+        'elements': elements[1:] if len(elements) > 1 else [],
+        'message_type': message_type
     }
     
     return segment_data
@@ -174,8 +175,8 @@ def determine_segment_status(segment_code: str, message_type: str = '') -> str:
 
 def assign_hierarchy(segment_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Assigns hierarchy levels based on GS1 EANCOM structure.
-    Only populates the specific level where the segment belongs.
+    Assigns hierarchy levels based on GS1 EANCOM branching diagrams.
+    Different hierarchies for INVOIC and CONTRL messages.
     """
     hierarchy = {
         'M/C/X': '',  # Left empty for user input
@@ -192,41 +193,55 @@ def assign_hierarchy(segment_data: Dict[str, Any]) -> Dict[str, Any]:
     }
     
     segment_code = segment_data['segment_code']
+    message_type = segment_data.get('message_type', '')
     
-    # Service segments (HL1)
-    if segment_code in ['UNA', 'UNB']:
-        hierarchy['HL1'] = segment_code
-        return hierarchy
+    # INVOIC message hierarchy
+    if message_type == 'INVOIC':
+        # HL1: Interchange Header
+        if segment_code == 'UNB':
+            hierarchy['HL1'] = segment_code
+        # HL2: Message Header
+        elif segment_code == 'UNH':
+            hierarchy['HL2'] = segment_code
+        # HL3: Header Section
+        elif segment_code in ['BGM', 'DTM']:
+            hierarchy['HL3'] = segment_code
+        # HL4: Name and Address
+        elif segment_code in ['NAD', 'RFF', 'CTA', 'COM']:
+            hierarchy['HL4'] = segment_code
+        # HL5: Line Item
+        elif segment_code == 'LIN':
+            hierarchy['HL5'] = segment_code
+        # HL6: Line Item Details
+        elif segment_code in ['PIA', 'IMD', 'QTY', 'MOA']:
+            hierarchy['HL6'] = segment_code
     
-    # Message header (HL2)
-    if segment_code == 'UNH':
-        hierarchy['HL2'] = segment_code
-        return hierarchy
+    # CONTRL message hierarchy
+    elif message_type == 'CONTRL':
+        # HL1: Interchange Header
+        if segment_code == 'UNB':
+            hierarchy['HL1'] = segment_code
+        # HL2: Message Header
+        elif segment_code == 'UNH':
+            hierarchy['HL2'] = segment_code
+        # HL3: Interchange Response
+        elif segment_code == 'UCI':
+            hierarchy['HL3'] = segment_code
+        # HL4: Message Response
+        elif segment_code == 'UCM':
+            hierarchy['HL4'] = segment_code
+        # HL5: Segment Error
+        elif segment_code == 'UCS':
+            hierarchy['HL5'] = segment_code
+        # HL6: Data Element Error
+        elif segment_code == 'UCD':
+            hierarchy['HL6'] = segment_code
     
-    # Business transaction segments (HL3)
-    if segment_code in ['BGM', 'DTM', 'PAI', 'ALI', 'FTX']:
-        hierarchy['HL3'] = segment_code
-        return hierarchy
-    
-    # Party information (HL4)
-    if segment_code in ['NAD', 'CTA', 'COM', 'RFF']:
-        hierarchy['HL4'] = segment_code
-        return hierarchy
-    
-    # Line item segments (HL5)
-    if segment_code == 'LIN':
-        hierarchy['HL5'] = segment_code
-        return hierarchy
-    
-    # Line item detail segments (HL6)
-    if segment_code in ['PIA', 'IMD', 'QTY', 'MOA', 'PRI', 'TAX']:
-        hierarchy['HL6'] = segment_code
-        return hierarchy
-    
-    # Special segments
-    if segment_code in ['UNS', 'CNT', 'UNT', 'UNZ']:
-        # These segments don't belong to the hierarchy but are part of the message
-        return hierarchy
+    # Handle summary sections
+    if segment_code in ['UNS', 'CNT']:
+        hierarchy['Note'] = 'Summary Section'
+    elif segment_code in ['UNT', 'UNZ']:
+        hierarchy['Note'] = 'Control Section'
         
     return hierarchy
 
