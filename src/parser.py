@@ -96,33 +96,89 @@ def get_segment_description(segment_code: str) -> str:
         'UCM': 'Message Response - To identify a message in the interchange and specify the action taken',
         'UCS': 'Segment Error Indication - To identify a segment containing an error',
         'UCD': 'Data Element Error Indication - To identify an error in a specified data element',
+        'UCF': 'Functional Group Response - To identify a functional group in the interchange',
         
         # Common segments
         'BGM': 'Beginning of Message - To indicate the type and function of a message',
         'DTM': 'Date/Time/Period - To specify dates, times, periods, and their formats',
         'RFF': 'Reference - To specify a reference that applies to the message',
         'NAD': 'Name and Address - To specify the name and address of a party',
+        'CTA': 'Contact Information - To identify a person or department',
+        'COM': 'Communication Contact - To identify a communication number',
+        'FTX': 'Free Text - To provide free-form text information',
+        'DOC': 'Document/Message Details - To identify documents or messages',
+        'CUX': 'Currencies - To specify currencies and exchange rates',
+        'PAT': 'Payment Terms Basis - To specify payment terms',
+        'MOA': 'Monetary Amount - To specify a monetary amount',
+        'PCD': 'Percentage Details - To specify percentage information',
+        
+        # Line item related segments
         'LIN': 'Line Item - To identify a line item and specify its configuration',
         'PIA': 'Additional Product ID - To specify additional product identification',
         'IMD': 'Item Description - To describe an item in free form or coded format',
         'QTY': 'Quantity - To specify a pertinent quantity',
+        'PRI': 'Price Details - To specify price information',
+        'TAX': 'Duty/Tax/Fee Details - To specify relevant duty/tax/fee information',
+        'MEA': 'Measurements - To specify physical measurements',
+        'PAC': 'Package - To describe packaging details',
+        
+        # Summary segments
         'UNS': 'Section Control - To separate header, detail and summary sections',
         'CNT': 'Control Total - To provide control total',
+        'ALC': 'Allowance or Charge - To identify allowance or charges',
+        'TMA': 'Total Message Amount - To specify total message amounts',
     }
     return descriptions.get(segment_code, 'Unknown Segment')
 
-def determine_segment_status(segment_code: str) -> str:
+def determine_segment_status(segment_code: str, message_type: str = '') -> str:
     """
     Determines if a segment is mandatory or conditional based on GS1 EANCOM standard.
+    Takes into account the message type for specific mandatory segments.
     """
+    # Universal mandatory segments
     mandatory_segments = {
         'UNB',  # Interchange header
         'UNH',  # Message header
         'BGM',  # Beginning of message
         'UNT',  # Message trailer
-        'UNZ'   # Interchange trailer
+        'UNZ',  # Interchange trailer
     }
-    return 'Mandatory' if segment_code in mandatory_segments else 'Conditional'
+    
+    # Message-specific mandatory segments
+    message_specific_mandatory = {
+        'ORDERS': {
+            'LIN',  # Line item
+            'QTY',  # Quantity
+            'UNS',  # Section control
+        },
+        'DESADV': {
+            'LIN',  # Line item
+            'QTY',  # Quantity
+            'UNS',  # Section control
+        },
+        'INVOIC': {
+            'LIN',  # Line item
+            'QTY',  # Quantity
+            'MOA',  # Monetary amount
+            'UNS',  # Section control
+        },
+        'CONTRL': {
+            'UCI',  # Interchange response
+            'UCM',  # Message response
+            'UCS',  # Segment error indication
+        }
+    }
+    
+    # Check if segment is universally mandatory
+    if segment_code in mandatory_segments:
+        return 'Mandatory'
+        
+    # Check message-specific mandatory segments
+    if message_type and message_type in message_specific_mandatory:
+        if segment_code in message_specific_mandatory[message_type]:
+            return 'Mandatory'
+    
+    return 'Conditional'
 
 def assign_hierarchy(segment_data: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -178,24 +234,60 @@ def assign_hierarchy(segment_data: Dict[str, Any]) -> Dict[str, Any]:
 def parse_edi_message(content: str) -> List[Dict[str, Any]]:
     """
     Parses a complete EDI message and returns structured data with validation.
+    Includes enhanced segment sequence validation and error reporting.
     """
     try:
         parser, segments = read_edi_file(content)
         parsed_data = []
+        message_type = ''
         
+        # First pass: identify message type
         for segment in segments:
+            if segment.startswith('UNH'):
+                try:
+                    elements = segment.split(parser.data_separator)
+                    if len(elements) > 2:
+                        message_type = elements[2].split(':')[0]
+                    break
+                except Exception:
+                    pass
+        
+        # Second pass: parse segments with context
+        for i, segment in enumerate(segments, 1):
             if segment.strip():  # Skip empty segments
                 try:
+                    # Enhanced segment validation
+                    if not re.match(r'^[A-Z]{3}', segment):
+                        raise ValueError(f"Invalid segment format at position {i}")
+                    
                     segment_data = parse_edi_segment(segment, parser)
-                    parser.segment_sequence.append(segment_data['segment_code'])
+                    segment_code = segment_data['segment_code']
+                    
+                    # Sequence validation
+                    if i == 1 and segment_code not in ['UNA', 'UNB']:
+                        raise ValueError("Message must start with UNA or UNB segment")
+                    if i == len(segments) and segment_code != 'UNZ':
+                        raise ValueError("Message must end with UNZ segment")
+                    
+                    # Update status based on message type
+                    segment_data['status'] = determine_segment_status(segment_code, message_type)
+                    
+                    parser.segment_sequence.append(segment_code)
                     hierarchy_data = assign_hierarchy(segment_data)
                     parsed_data.append(hierarchy_data)
+                    
                 except Exception as e:
-                    raise ValueError(f"Error parsing segment '{segment}': {str(e)}")
+                    raise ValueError(f"Error in segment {i} '{segment}': {str(e)}")
         
-        # Validate envelope structure
+        # Enhanced structure validation
         if not validate_envelope_structure(parsed_data):
-            raise ValueError("Invalid EDIFACT envelope structure")
+            raise ValueError("Invalid EDIFACT envelope structure: Missing required segments or incorrect sequence")
+            
+        # Validate message structure based on type
+        if message_type:
+            mandatory_segments = [seg for seg in parsed_data if seg['M/C Std'] == 'Mandatory']
+            if not mandatory_segments:
+                raise ValueError(f"Missing mandatory segments for message type {message_type}")
         
         return parsed_data
     except Exception as e:
