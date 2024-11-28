@@ -58,19 +58,23 @@ def parse_edi_segment(segment: str, parser: EDIFACTParser, message_type: str = '
     return segment_data
 
 def determine_max_use(segment_code: str) -> str:
-    """Determines maximum usage of a segment based on EDIFACT rules"""
-    # Default max use values based on EDIFACT standards
+    """Determines maximum usage of a segment based on EDIFACT rules and message type"""
+    # Default max use values based on GS1 EANCOM standards
     max_use_rules = {
-        'UNA': '1',
-        'UNB': '1',
-        'UNH': '1',
-        'UNT': '1',
-        'UNZ': '1',
+        'UNA': '1',    # pos 1
+        'UNB': '1',    # pos 2
+        'UNH': '1',    # pos 3
+        'UCI': '1',    # pos 4
+        'UCM': '1',    # pos 5
+        'UCS': '999',  # pos 6
+        'UCD': '99',   # pos 7
+        'UNT': '1',    # pos 8
+        'UNZ': '1',    # pos 9
         'BGM': '1',
-        'DTM': '9',  # Common max use for date/time segments
-        'NAD': '9',  # Multiple parties allowed
-        'LIN': '999999',  # Line items can repeat many times
-        'RFF': '9',  # References can repeat
+        'DTM': '9',
+        'NAD': '9',
+        'LIN': '999999',
+        'RFF': '9',
     }
     return max_use_rules.get(segment_code, '1')
 
@@ -133,50 +137,40 @@ def get_segment_description(segment_code: str) -> str:
 
 def determine_segment_status(segment_code: str, message_type: str = '') -> str:
     """
-    Determines if a segment is mandatory or conditional based on GS1 EANCOM standard.
-    Takes into account the message type for specific mandatory segments.
+    Determines if a segment is mandatory or conditional based on GS1 EANCOM branching diagrams.
+    For CONTRL message, follows exact diagram M/C markers.
     """
-    # Universal mandatory segments
-    mandatory_segments = {
-        'UNB',  # Interchange header
-        'UNH',  # Message header
-        'BGM',  # Beginning of message
-        'UNT',  # Message trailer
-        'UNZ',  # Interchange trailer
-    }
-    
-    # Message-specific mandatory segments based on GS1 EANCOM
-    message_specific_mandatory = {
-        'INVOIC': {
-            'BGM',  # Beginning of message
-            'DTM',  # Date/time/period
-            'NAD',  # Name and address
-            'LIN',  # Line item
-            'QTY',  # Quantity
-            'MOA',  # Monetary amount
-            'UNS',  # Section control
-        },
-        'CONTRL': {
-            'UCI',  # Interchange response
-            'UCM',  # Message response
+    # CONTRL message specific statuses (per branching diagram)
+    if message_type == 'CONTRL':
+        contrl_status = {
+            'UNA': 'Conditional',   # C,1,pos 1
+            'UNB': 'Mandatory',     # M,1,pos 2
+            'UNH': 'Mandatory',     # M,1,pos 3
+            'UCI': 'Mandatory',     # M,1,pos 4
+            'UCM': 'Mandatory',     # M,1,pos 5
+            'UCS': 'Conditional',   # C,999,pos 6
+            'UCD': 'Conditional',   # C,99,pos 7
+            'UNT': 'Mandatory',     # M,1,pos 8
+            'UNZ': 'Mandatory',     # M,1,pos 9
         }
-    }
+        return contrl_status.get(segment_code, 'Conditional')
     
-    # Check if segment is universally mandatory
-    if segment_code in mandatory_segments:
-        return 'Mandatory'
-        
-    # Check message-specific mandatory segments
-    if message_type and message_type in message_specific_mandatory:
-        if segment_code in message_specific_mandatory[message_type]:
-            return 'Mandatory'
+    # INVOIC message specific statuses
+    elif message_type == 'INVOIC':
+        invoic_mandatory = {
+            'UNB', 'UNH', 'BGM', 'DTM', 'NAD', 'LIN', 
+            'QTY', 'MOA', 'UNS', 'UNT', 'UNZ'
+        }
+        return 'Mandatory' if segment_code in invoic_mandatory else 'Conditional'
     
-    return 'Conditional'
+    # Default status for other message types or when no message type specified
+    universal_mandatory = {'UNB', 'UNH', 'UNT', 'UNZ'}
+    return 'Mandatory' if segment_code in universal_mandatory else 'Conditional'
 
 def assign_hierarchy(segment_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Assigns hierarchy levels based on GS1 EANCOM branching diagrams.
-    Different hierarchies for INVOIC and CONTRL messages.
+    CONTRL message follows exact branching diagram structure.
     """
     hierarchy = {
         'M/C/X': '',  # Left empty for user input
@@ -195,8 +189,30 @@ def assign_hierarchy(segment_data: Dict[str, Any]) -> Dict[str, Any]:
     segment_code = segment_data['segment_code']
     message_type = segment_data.get('message_type', '')
     
+    # CONTRL message hierarchy (per branching diagram)
+    if message_type == 'CONTRL':
+        # Level 0 segments
+        if segment_code in ['UNA', 'UNB', 'UNH', 'UCI', 'UNT', 'UNZ']:
+            hierarchy['HL1'] = segment_code
+            hierarchy['Note'] = f'Position {["UNA", "UNB", "UNH", "UCI", "UNT", "UNZ"].index(segment_code) + 1}'
+        
+        # Level 1 (SG1) - UCM
+        elif segment_code == 'UCM':
+            hierarchy['HL2'] = segment_code
+            hierarchy['Note'] = 'SG1 - Position 5'
+        
+        # Level 2 (SG2) - UCS
+        elif segment_code == 'UCS':
+            hierarchy['HL3'] = segment_code
+            hierarchy['Note'] = 'SG2 - Position 6'
+        
+        # Level 3 - UCD
+        elif segment_code == 'UCD':
+            hierarchy['HL4'] = segment_code
+            hierarchy['Note'] = 'Position 7'
+    
     # INVOIC message hierarchy
-    if message_type == 'INVOIC':
+    elif message_type == 'INVOIC':
         # HL1: Interchange Header
         if segment_code == 'UNB':
             hierarchy['HL1'] = segment_code
@@ -215,33 +231,6 @@ def assign_hierarchy(segment_data: Dict[str, Any]) -> Dict[str, Any]:
         # HL6: Line Item Details
         elif segment_code in ['PIA', 'IMD', 'QTY', 'MOA']:
             hierarchy['HL6'] = segment_code
-    
-    # CONTRL message hierarchy
-    elif message_type == 'CONTRL':
-        # HL1: Interchange Header
-        if segment_code == 'UNB':
-            hierarchy['HL1'] = segment_code
-        # HL2: Message Header
-        elif segment_code == 'UNH':
-            hierarchy['HL2'] = segment_code
-        # HL3: Interchange Response
-        elif segment_code == 'UCI':
-            hierarchy['HL3'] = segment_code
-        # HL4: Message Response
-        elif segment_code == 'UCM':
-            hierarchy['HL4'] = segment_code
-        # HL5: Segment Error
-        elif segment_code == 'UCS':
-            hierarchy['HL5'] = segment_code
-        # HL6: Data Element Error
-        elif segment_code == 'UCD':
-            hierarchy['HL6'] = segment_code
-    
-    # Handle summary sections
-    if segment_code in ['UNS', 'CNT']:
-        hierarchy['Note'] = 'Summary Section'
-    elif segment_code in ['UNT', 'UNZ']:
-        hierarchy['Note'] = 'Control Section'
         
     return hierarchy
 
