@@ -36,15 +36,30 @@ def get_segment_description(segment_code: str) -> str:
     Source: GS1 EANCOM documentation
     """
     descriptions = {
+        # Standard message header and trailer segments
         'UNH': 'Message Header - To head, identify and specify a message',
-        'BGM': 'Beginning of Message - To indicate the beginning of a message and to transmit identifying number',
-        'DTM': 'Date/Time/Period - To specify date, time or period',
-        'RFF': 'Reference - To specify a reference',
-        'NAD': 'Name and Address - To specify the name/address and their related function',
+        'UNT': 'Message Trailer - To end and check the completeness of a message',
+        
+        # CONTRL-specific segments from GS1 EANCOM
+        'UCI': 'Interchange Response - To start, identify and specify an interchange response',
+        'UCM': 'Message Response - To identify a message in the interchange, and to specify the action taken by the recipient',
+        'UCS': 'Segment Error Indication - To identify a segment containing an error and to identify the nature of the error',
+        'UCD': 'Data Element Error Indication - To identify an error in a specified data element',
+        
+        # Common EDIFACT segments
+        'BGM': 'Beginning of Message - To indicate the type and function of a message and to transmit its identifying number',
+        'DTM': 'Date/Time/Period - To specify dates, times, periods, and their formats',
+        'RFF': 'Reference - To specify a reference that applies to the message',
+        'FTX': 'Free Text - To provide free-form textual information',
+        'NAD': 'Name and Address - To specify the name and address of a party and its related function',
         'CTA': 'Contact Information - To identify a person or department to whom communication should be directed',
         'COM': 'Communication Contact - To identify a communication number of a person or department',
+        'ERC': 'Application Error Information - To identify an application error within a message',
+        'GIS': 'General Indicator - To transmit a general indicator code',
+        
+        # Additional business segments
         'TAX': 'Duty/Tax/Fee Details - To specify relevant duty/tax/fee information',
-        'CUX': 'Currencies - To specify currencies used in the transaction',
+        'CUX': 'Currencies - To specify currencies used in the transaction and relevant details',
         'PAT': 'Payment Terms Basis - To specify the payment terms basis',
         'LIN': 'Line Item - To identify a line item and specify its configuration',
         'PIA': 'Additional Product ID - To specify additional or substitutional item identification codes',
@@ -54,7 +69,12 @@ def get_segment_description(segment_code: str) -> str:
         'MOA': 'Monetary Amount - To specify a monetary amount',
         'UNS': 'Section Control - To separate header, detail and summary sections',
         'CNT': 'Control Total - To provide control total',
-        'UNT': 'Message Trailer - To end and check the completeness of a message'
+        
+        # Grouping and control segments
+        'UGH': 'Anti-collision Segment Group Header - To head, identify and specify an anti-collision segment group',
+        'UGT': 'Anti-collision Segment Group Trailer - To end and check the completeness of an anti-collision segment group',
+        'UNB': 'Interchange Header - To start, identify and specify an interchange',
+        'UNZ': 'Interchange Trailer - To end and check the completeness of an interchange'
     }
     return descriptions.get(segment_code, 'Unknown Segment')
 
