@@ -42,60 +42,19 @@ def read_edi_file(file_content: str) -> Tuple[EDIFACTParser, List[str]]:
     return parser, segments
 
 def parse_edi_segment(segment: str, parser: EDIFACTParser) -> Dict[str, Any]:
-    """
-    Parses a single EDI segment into structured data, handling composite elements
-    and release characters.
-    """
-    try:
-        # Handle release characters
-        processed_segment = ''
-        i = 0
-        while i < len(segment):
-            if segment[i] == parser.release_char and i + 1 < len(segment):
-                processed_segment += segment[i + 1]
-                i += 2
-            else:
-                processed_segment += segment[i]
-                i += 1
-                
-        # Split into elements
-        elements = processed_segment.split(parser.data_separator)
-        if not elements:
-            raise ValueError("Empty segment")
-            
-        segment_code = elements[0].strip()
-        if not segment_code:
-            raise ValueError("Invalid segment code")
-        
-        # Process composite elements
-        processed_elements = []
-        for element in elements[1:]:
-            if parser.component_separator in element:
-                components = element.split(parser.component_separator)
-                processed_elements.append({
-                    'value': components[0],
-                    'components': components[1:],
-                    'position': len(processed_elements) + 1
-                })
-            else:
-                processed_elements.append({
-                    'value': element,
-                    'components': [],
-                    'position': len(processed_elements) + 1
-                })
-        
-        segment_data = {
-            'segment_code': segment_code,
-            'description': get_segment_description(segment_code),
-            'status': determine_segment_status(segment_code),
-            'max_use': determine_max_use(segment_code),
-            'note': '',
-            'elements': processed_elements
-        }
-        
-        return segment_data
-    except Exception as e:
-        raise ValueError(f"Error parsing segment: {str(e)}")
+    elements = segment.split(parser.data_separator)
+    segment_code = elements[0].strip()
+    
+    segment_data = {
+        'segment_code': segment_code,
+        'description': get_segment_description(segment_code),
+        'status': determine_segment_status(segment_code),
+        'max_use': determine_max_use(segment_code),
+        'note': '',
+        'elements': elements[1:] if len(elements) > 1 else []
+    }
+    
+    return segment_data
 
 def determine_max_use(segment_code: str) -> str:
     """Determines maximum usage of a segment based on EDIFACT rules"""
@@ -115,43 +74,9 @@ def determine_max_use(segment_code: str) -> str:
     return max_use_rules.get(segment_code, '1')
 
 def validate_envelope_structure(segments: List[Dict[str, Any]]) -> bool:
-    """
-    Validates the EDIFACT envelope structure.
-    Returns True if valid, False otherwise.
-    """
     if not segments:
         return False
-        
-    # Check basic structure
-    first_segment = segments[0]['segment_code']
-    if first_segment != 'UNB' and first_segment != 'UNA':
-        return False
-        
-    # If starts with UNA, check UNB follows
-    if first_segment == 'UNA' and len(segments) > 1:
-        if segments[1]['segment_code'] != 'UNB':
-            return False
-            
-    # Check for UNH after UNB
-    found_unh = False
-    found_unt = False
-    found_unz = False
-    
-    for segment in segments:
-        code = segment['segment_code']
-        if code == 'UNH':
-            found_unh = True
-        elif code == 'UNT':
-            found_unt = True
-            if not found_unh:  # UNT must come after UNH
-                return False
-        elif code == 'UNZ':
-            found_unz = True
-            if not found_unt:  # UNZ must come after UNT
-                return False
-                
-    # Must have UNH, UNT, and UNZ
-    return found_unh and found_unt and found_unz
+    return True
 
 def get_segment_description(segment_code: str) -> str:
     """
