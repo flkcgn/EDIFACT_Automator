@@ -11,9 +11,24 @@ st.set_page_config(
 
 def process_file(uploaded_file):
     try:
-        # Read the uploaded EDI file
-        content = uploaded_file.getvalue().decode('utf-8')
-        
+        # Read the uploaded EDI file with proper error handling
+        if uploaded_file is None:
+            st.error("No file uploaded")
+            return None
+            
+        try:
+            content = uploaded_file.getvalue().decode('utf-8')
+        except UnicodeDecodeError:
+            try:
+                content = uploaded_file.getvalue().decode('latin-1')
+            except Exception as e:
+                st.error(f"Error reading file: {str(e)}")
+                return None
+                
+        if not content.strip():
+            st.error("File is empty")
+            return None
+            
         # Process the EDI content
         processed_data = parse_edi_message(content)
         
@@ -37,12 +52,18 @@ def main():
     
     st.write("""
     Upload your EDIFACT message file to generate a hierarchical specification.
-    The file should be in .edi format with UTF-8 encoding.
+    The file should be in .edi format with UTF-8 or Latin-1 encoding.
+    Maximum file size: 10MB
     """)
     
     uploaded_file = st.file_uploader("Choose an EDI file", type=['edi'])
     
     if uploaded_file is not None:
+        # Check file size (limit to 10MB)
+        if uploaded_file.size > 10 * 1024 * 1024:
+            st.error("File size too large. Please upload a file smaller than 10MB")
+            return
+            
         st.info("Processing EDIFACT message...")
         
         result_df = process_file(uploaded_file)
