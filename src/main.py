@@ -1,84 +1,57 @@
 import streamlit as st
 import pandas as pd
-import io
-from parser import parse_edi_message
+from parser import get_segment_description, determine_segment_status, determine_max_use, assign_hierarchy
 
-st.set_page_config(
-    page_title="EDIFACT Specification Automation",
-    page_icon="📊",
-    layout="wide"
-)
-
-def process_file(uploaded_file):
-    try:
-        # Read the uploaded EDI file with proper error handling
-        if uploaded_file is None:
-            st.error("No file uploaded")
-            return None
-            
-        # Try multiple encodings in sequence
-        encodings = ['utf-8', 'latin-1', 'utf-16', 'cp1252', 'ascii']
-        content = None
-        
-        for encoding in encodings:
-            try:
-                content = uploaded_file.getvalue().decode(encoding)
-                break
-            except UnicodeDecodeError:
-                continue
-                
-        if content is None:
-            st.error("Unable to decode file with supported encodings")
-            return None
-                
-        if not content.strip():
-            st.error("File is empty")
-            return None
-            
-        # Process the EDI content
-        processed_data = parse_edi_message(content)
-        
-        if not processed_data:
-            st.error("No valid EDIFACT segments found in the file")
-            return None
-            
-        # Create output DataFrame
-        columns = ['M/C/X', 'HL1', 'HL2', 'HL3', 'HL4', 'HL5', 'HL6', 
-                  'Name', 'M/C Std', 'Max-Use', 'Note']
-        result_df = pd.DataFrame(processed_data, columns=columns)
-        
-        return result_df
-        
-    except Exception as e:
-        st.error(f"Error processing EDI file: {str(e)}")
-        return None
+def generate_standard_segments(message_type: str) -> list:
+    """Generate standard segments based on message type"""
+    segments = {
+        'INVOIC': ['UNB', 'UNH', 'BGM', 'DTM', 'NAD', 'CUX', 'LIN', 'QTY', 'MOA', 'UNS', 'CNT', 'UNT', 'UNZ'],
+        'CONTRL': ['UNB', 'UNH', 'UCI', 'UCM', 'UCS', 'UCD', 'UNT', 'UNZ']
+    }
+    
+    result = []
+    for segment_code in segments.get(message_type, []):
+        segment_data = {
+            'segment_code': segment_code,
+            'description': get_segment_description(segment_code),
+            'status': determine_segment_status(segment_code, message_type),
+            'max_use': determine_max_use(segment_code),
+            'note': '',
+            'elements': []
+        }
+        hierarchy_data = assign_hierarchy(segment_data)
+        result.append(hierarchy_data)
+    return result
 
 def main():
     st.title("EDIFACT Specification Automation")
     
     st.write("""
-    Upload your EDIFACT message file to generate a hierarchical specification.
-    The file should be in .edi format with UTF-8 or Latin-1 encoding.
-    Maximum file size: 10MB
+    Select a message type to generate its standard segment specification.
+    The table will show the hierarchical structure and segment details.
     """)
     
-    uploaded_file = st.file_uploader("Choose an EDI file", type=['edi'])
+    # Message type selection
+    message_type = st.selectbox(
+        "Select Message Type",
+        options=['INVOIC', 'CONTRL'],
+        format_func=lambda x: f"{x} - {'Invoice' if x == 'INVOIC' else 'Control'} Message"
+    )
     
-    if uploaded_file is not None:
-        # Check file size (limit to 10MB)
-        if uploaded_file.size > 10 * 1024 * 1024:
-            st.error("File size too large. Please upload a file smaller than 10MB")
-            return
-            
-        st.info("Processing EDIFACT message...")
+    if message_type:
+        st.info(f"Generating specification for {message_type} message type...")
         
-        result_df = process_file(uploaded_file)
+        # Generate segments based on selected message type
+        result_data = generate_standard_segments(message_type)
         
-        if result_df is not None:
-            st.success("EDIFACT message processed successfully!")
+        if result_data:
+            # Create DataFrame with the specified columns
+            columns = ['M/C/X', 'HL1', 'HL2', 'HL3', 'HL4', 'HL5', 'HL6', 
+                      'Name', 'M/C Std', 'Max-Use', 'Note']
+            result_df = pd.DataFrame(result_data, columns=columns)
             
             # Display preview
-            st.subheader("Preview of processed segments")
+            st.subheader("Message Specification")
             st.dataframe(result_df)
             
             # Generate download link
@@ -88,7 +61,7 @@ def main():
             st.download_button(
                 label="Download specification CSV",
                 data=csv_bytes,
-                file_name="edifact_specification.csv",
+                file_name=f"{message_type.lower()}_specification.csv",
                 mime="text/csv"
             )
             
@@ -98,9 +71,9 @@ def main():
             with col1:
                 st.metric("Total Segments", len(result_df))
             with col2:
-                st.metric("Mandatory Segments", len(result_df[result_df['M/C/X'] == 'M']))
+                st.metric("Mandatory Segments", len(result_df[result_df['M/C Std'] == 'Mandatory']))
             with col3:
-                st.metric("Conditional Segments", len(result_df[result_df['M/C/X'] == 'C']))
+                st.metric("Conditional Segments", len(result_df[result_df['M/C Std'] == 'Conditional']))
 
 if __name__ == "__main__":
     main()
