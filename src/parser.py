@@ -32,41 +32,50 @@ def parse_edi_segment(segment: str) -> Dict[str, Any]:
 
 def get_segment_description(segment_code: str) -> str:
     """
-    Returns the description for a given segment code using official GS1 standard names.
+    Returns the description for a given segment code using official GS1 EANCOM standard names.
+    Source: GS1 EANCOM documentation
     """
     descriptions = {
-        'UNH': 'Message Header',
-        'BGM': 'Beginning of Message',
-        'DTM': 'Date/Time/Period',
-        'RFF': 'Reference',
-        'NAD': 'Name and Address',
-        'CTA': 'Contact Information',
-        'COM': 'Communication Contact',
-        'TAX': 'Duty/Tax/Fee Details',
-        'CUX': 'Currencies',
-        'PAT': 'Payment Terms Basis',
-        'LIN': 'Line Item',
-        'PIA': 'Additional Product ID',
-        'IMD': 'Item Description',
-        'QTY': 'Quantity',
-        'PRI': 'Price Details',
-        'MOA': 'Monetary Amount',
-        'UNS': 'Section Control',
-        'CNT': 'Control Total',
-        'UNT': 'Message Trailer'
+        'UNH': 'Message Header - To head, identify and specify a message',
+        'BGM': 'Beginning of Message - To indicate the beginning of a message and to transmit identifying number',
+        'DTM': 'Date/Time/Period - To specify date, time or period',
+        'RFF': 'Reference - To specify a reference',
+        'NAD': 'Name and Address - To specify the name/address and their related function',
+        'CTA': 'Contact Information - To identify a person or department to whom communication should be directed',
+        'COM': 'Communication Contact - To identify a communication number of a person or department',
+        'TAX': 'Duty/Tax/Fee Details - To specify relevant duty/tax/fee information',
+        'CUX': 'Currencies - To specify currencies used in the transaction',
+        'PAT': 'Payment Terms Basis - To specify the payment terms basis',
+        'LIN': 'Line Item - To identify a line item and specify its configuration',
+        'PIA': 'Additional Product ID - To specify additional or substitutional item identification codes',
+        'IMD': 'Item Description - To describe an item in free form or coded format',
+        'QTY': 'Quantity - To specify a pertinent quantity',
+        'PRI': 'Price Details - To specify price information',
+        'MOA': 'Monetary Amount - To specify a monetary amount',
+        'UNS': 'Section Control - To separate header, detail and summary sections',
+        'CNT': 'Control Total - To provide control total',
+        'UNT': 'Message Trailer - To end and check the completeness of a message'
     }
     return descriptions.get(segment_code, 'Unknown Segment')
 
 def determine_segment_status(segment_code: str) -> str:
     """
-    Determines if a segment is mandatory or conditional based on common EDIFACT rules.
+    Determines if a segment is mandatory or conditional based on GS1 EANCOM standard.
     """
-    mandatory_segments = {'UNH', 'BGM', 'UNT', 'LIN'}
+    # Updated according to GS1 EANCOM standard
+    mandatory_segments = {
+        'UNH',  # Message header
+        'BGM',  # Beginning of message
+        'LIN',  # Line item
+        'QTY',  # Quantity
+        'UNT'   # Message trailer
+    }
     return 'Mandatory' if segment_code in mandatory_segments else 'Conditional'
 
 def assign_hierarchy(segment_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Assigns hierarchy levels based on segment data and EDIFACT message structure.
+    Uses full segment descriptions in the Name field.
     """
     hierarchy = {
         'M/C/X': '',  # Left empty for user input
@@ -76,7 +85,7 @@ def assign_hierarchy(segment_data: Dict[str, Any]) -> Dict[str, Any]:
         'HL4': '',
         'HL5': '',
         'HL6': '',
-        'Name': segment_data['segment_code'],
+        'Name': segment_data['description'],  # Using full description instead of segment code
         'M/C Std': segment_data['status'],
         'Max-Use': segment_data['max_use'],
         'Note': segment_data['note']
