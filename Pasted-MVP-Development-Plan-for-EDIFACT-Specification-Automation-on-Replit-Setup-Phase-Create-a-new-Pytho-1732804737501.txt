@@ -1,0 +1,68 @@
+MVP Development Plan for EDIFACT Specification Automation on Replit
+Setup Phase
+Create a new Python Repl
+Choose "Python" as language
+Name it "edifact-spec-automation"
+Set up basic project structure:
+text
+/data
+  - gs1_segments.csv    # GS1 standard segments
+  - hierarchy_levels.csv # Predefined hierarchy levels
+/src
+  - main.py
+  - parser.py
+
+Core Implementation
+Create basic data structure for hierarchy levels:
+python
+# In main.py
+columns = ['M/C/X', 'HL1', 'HL2', 'HL3', 'HL4', 'HL5', 'HL6', 'Name', 'M/C Std', 'Max-Use', 'Note']
+
+Implement CSV reader for GS1 standard segments:
+python
+import pandas as pd
+
+def load_gs1_data(file_path):
+    return pd.read_csv(file_path)
+
+Create segment parser function:
+python
+def parse_segment(segment_line):
+    # Parse single segment into column structure
+    return parsed_data
+
+Implement hierarchy level assignment logic:
+python
+def assign_hierarchy(segment_data):
+    # Logic to determine HL1-HL6 for each segment
+    return hierarchy_data
+
+Add output generation:
+python
+def generate_specification(parsed_data):
+    df = pd.DataFrame(parsed_data, columns=columns)
+    return df.to_csv('output_spec.csv', index=False)
+
+Testing & Validation
+Create sample test data file with 2-3 segments
+Run basic validation checks
+Test output format matches required table structure
+Replit-Specific Features to Use
+Replit's Files pane for CSV management
+Python packages manager for pandas installation
+Console output for debugging
+Key Challenges to Watch
+CSV encoding issues (use UTF-8)
+Hierarchy level logic complexity
+Memory management for large files
+Pandas DataFrame performance
+Expected MVP Outcome
+Input: GS1 standard segments
+Output: CSV file with segments organized by hierarchy levels
+Manual input needed only for M/C status
+Automated hierarchy level assignment
+Command to Run
+bash
+python src/main.py input_file.csv
+
+Remember: This MVP focuses on basic functionality. Error handling, UI, and optimizations can be added later.
