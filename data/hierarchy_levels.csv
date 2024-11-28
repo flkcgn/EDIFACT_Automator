@@ -1,0 +1,7 @@
+Level,Description,Parent_Level
+HL1,Message Header,
+HL2,Business Document,HL1
+HL3,Document Details,HL2
+HL4,Party Information,HL3
+HL5,Line Items,HL4
+HL6,Item Details,HL5

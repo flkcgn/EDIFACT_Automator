@@ -1,0 +1,10 @@
+Segment,Description,Status
+UNH,Message Header,M
+BGM,Beginning of Message,M
+DTM,Date/Time/Period,C
+NAD,Name and Address,C
+LIN,Line Item,M
+PIA,Additional Product ID,C
+IMD,Item Description,C
+QTY,Quantity,M
+UNT,Message Trailer,M
