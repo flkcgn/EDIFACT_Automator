@@ -28,24 +28,31 @@ def parse_edi_segment(segment: str) -> Dict[str, Any]:
         'elements': elements[1:] if len(elements) > 1 else []
     }
     
-    # Extract M/C/X status
-    segment_data['m_c_x'] = segment_data['status'][0].upper()
-    
     return segment_data
 
 def get_segment_description(segment_code: str) -> str:
     """
-    Returns the description for a given segment code.
+    Returns the description for a given segment code using official GS1 standard names.
     """
     descriptions = {
         'UNH': 'Message Header',
         'BGM': 'Beginning of Message',
         'DTM': 'Date/Time/Period',
+        'RFF': 'Reference',
         'NAD': 'Name and Address',
+        'CTA': 'Contact Information',
+        'COM': 'Communication Contact',
+        'TAX': 'Duty/Tax/Fee Details',
+        'CUX': 'Currencies',
+        'PAT': 'Payment Terms Basis',
         'LIN': 'Line Item',
         'PIA': 'Additional Product ID',
         'IMD': 'Item Description',
         'QTY': 'Quantity',
+        'PRI': 'Price Details',
+        'MOA': 'Monetary Amount',
+        'UNS': 'Section Control',
+        'CNT': 'Control Total',
         'UNT': 'Message Trailer'
     }
     return descriptions.get(segment_code, 'Unknown Segment')
@@ -54,7 +61,7 @@ def determine_segment_status(segment_code: str) -> str:
     """
     Determines if a segment is mandatory or conditional based on common EDIFACT rules.
     """
-    mandatory_segments = {'UNH', 'BGM', 'UNT'}
+    mandatory_segments = {'UNH', 'BGM', 'UNT', 'LIN'}
     return 'Mandatory' if segment_code in mandatory_segments else 'Conditional'
 
 def assign_hierarchy(segment_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -62,7 +69,7 @@ def assign_hierarchy(segment_data: Dict[str, Any]) -> Dict[str, Any]:
     Assigns hierarchy levels based on segment data and EDIFACT message structure.
     """
     hierarchy = {
-        'M/C/X': segment_data['m_c_x'],
+        'M/C/X': '',  # Left empty for user input
         'HL1': '',
         'HL2': '',
         'HL3': '',
@@ -87,11 +94,11 @@ def assign_hierarchy(segment_data: Dict[str, Any]) -> Dict[str, Any]:
         hierarchy['HL1'] = 'UNH'
         hierarchy['HL2'] = 'BGM'
         hierarchy['HL3'] = segment_code
-    elif segment_code.startswith('NAD'):
+    elif segment_code in ['NAD', 'CTA', 'COM']:
         hierarchy['HL1'] = 'UNH'
         hierarchy['HL2'] = 'BGM'
         hierarchy['HL4'] = segment_code
-    elif segment_code in ['LIN', 'PIA', 'IMD', 'QTY']:
+    elif segment_code in ['LIN', 'PIA', 'IMD', 'QTY', 'PRI', 'MOA']:
         hierarchy['HL1'] = 'UNH'
         hierarchy['HL5'] = 'LIN'
         hierarchy['HL6'] = segment_code
