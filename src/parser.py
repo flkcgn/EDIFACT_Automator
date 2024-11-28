@@ -144,19 +144,12 @@ def determine_segment_status(segment_code: str, message_type: str = '') -> str:
         'UNZ',  # Interchange trailer
     }
     
-    # Message-specific mandatory segments
+    # Message-specific mandatory segments based on GS1 EANCOM
     message_specific_mandatory = {
-        'ORDERS': {
-            'LIN',  # Line item
-            'QTY',  # Quantity
-            'UNS',  # Section control
-        },
-        'DESADV': {
-            'LIN',  # Line item
-            'QTY',  # Quantity
-            'UNS',  # Section control
-        },
         'INVOIC': {
+            'BGM',  # Beginning of message
+            'DTM',  # Date/time/period
+            'NAD',  # Name and address
             'LIN',  # Line item
             'QTY',  # Quantity
             'MOA',  # Monetary amount
@@ -165,7 +158,6 @@ def determine_segment_status(segment_code: str, message_type: str = '') -> str:
         'CONTRL': {
             'UCI',  # Interchange response
             'UCM',  # Message response
-            'UCS',  # Segment error indication
         }
     }
     

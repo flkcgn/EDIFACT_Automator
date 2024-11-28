@@ -3,10 +3,15 @@ import pandas as pd
 from parser import get_segment_description, determine_segment_status, determine_max_use, assign_hierarchy
 
 def generate_standard_segments(message_type: str) -> list:
-    """Generate standard segments based on message type"""
+    """Generate standard segments based on GS1 EANCOM standards"""
     segments = {
-        'INVOIC': ['UNB', 'UNH', 'BGM', 'DTM', 'NAD', 'CUX', 'LIN', 'QTY', 'MOA', 'UNS', 'CNT', 'UNT', 'UNZ'],
-        'CONTRL': ['UNB', 'UNH', 'UCI', 'UCM', 'UCS', 'UCD', 'UNT', 'UNZ']
+        'INVOIC': [
+            'UNH', 'BGM', 'DTM', 'PAI', 'ALI', 'FTX', 'RFF', 'NAD', 'RFF', 'CTA', 'COM', 
+            'CUX', 'PAT', 'DTM', 'PCD', 'MOA', 'TDT', 'LOC', 'TOD', 'LIN', 'PIA', 'IMD', 
+            'MEA', 'QTY', 'DTM', 'MOA', 'PRI', 'RFF', 'LOC', 'TAX', 'NAD', 'ALC', 'PCD', 
+            'MOA', 'UNS', 'CNT', 'UNT'
+        ],
+        'CONTRL': ['UNH', 'UCI', 'UCM', 'UCS', 'UCD', 'UNT']
     }
     
     result = []
