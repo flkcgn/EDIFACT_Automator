@@ -137,7 +137,7 @@ def assign_hierarchy(segment_data: Dict[str, Any]) -> Dict[str, Any]:
         'HL4': '',
         'HL5': '',
         'HL6': '',
-        'Name': segment_data['description'],
+        'Name': segment_data['description'].split('-')[0].strip(),
         'M/C Std': segment_data['status'],
         'Max-Use': segment_data['max_use'],
         'Note': segment_data['note']

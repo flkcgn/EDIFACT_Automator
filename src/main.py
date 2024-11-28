@@ -16,14 +16,20 @@ def process_file(uploaded_file):
             st.error("No file uploaded")
             return None
             
-        try:
-            content = uploaded_file.getvalue().decode('utf-8')
-        except UnicodeDecodeError:
+        # Try multiple encodings in sequence
+        encodings = ['utf-8', 'latin-1', 'utf-16', 'cp1252', 'ascii']
+        content = None
+        
+        for encoding in encodings:
             try:
-                content = uploaded_file.getvalue().decode('latin-1')
-            except Exception as e:
-                st.error(f"Error reading file: {str(e)}")
-                return None
+                content = uploaded_file.getvalue().decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+                
+        if content is None:
+            st.error("Unable to decode file with supported encodings")
+            return None
                 
         if not content.strip():
             st.error("File is empty")
