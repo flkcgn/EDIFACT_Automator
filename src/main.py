@@ -6,14 +6,15 @@ def generate_standard_segments(message_type: str) -> list:
     """Generate standard segments based on GS1 EANCOM standards"""
     segments = {
         'INVOIC': [
-            'UNH', 'BGM', 'DTM', 'PAI', 'ALI', 'FTX', 'RFF', 'NAD', 'RFF', 'CTA', 'COM', 
+            'UNA', 'UNB', 'UNH', 'BGM', 'DTM', 'PAI', 'ALI', 'FTX', 'RFF', 'NAD', 'RFF', 'CTA', 'COM', 
             'CUX', 'PAT', 'DTM', 'PCD', 'MOA', 'TDT', 'LOC', 'TOD', 'LIN', 'PIA', 'IMD', 
             'MEA', 'QTY', 'DTM', 'MOA', 'PRI', 'RFF', 'LOC', 'TAX', 'NAD', 'ALC', 'PCD', 
-            'MOA', 'UNS', 'CNT', 'UNT'
+            'MOA', 'UNS', 'CNT', 'UNT', 'UNZ'
         ],
-        'CONTRL': ['UNH', 'UCI', 'UCM', 'UCS', 'UCD', 'UNT']
+        'CONTRL': ['UNA', 'UNB', 'UNH', 'UCI', 'UCM', 'UCS', 'UCD', 'UNT', 'UNZ']
     }
     
+    st.write("Debug: Processing segments for message type:", message_type)
     result = []
     for segment_code in segments.get(message_type, []):
         segment_data = {
@@ -22,10 +23,16 @@ def generate_standard_segments(message_type: str) -> list:
             'status': determine_segment_status(segment_code, message_type),
             'max_use': determine_max_use(segment_code),
             'note': '',
-            'elements': []
+            'elements': [],
+            'message_type': message_type
         }
+        st.write(f"Debug: Processing segment {segment_code}:")
+        st.write(f"Status: {segment_data['status']}, Max-Use: {segment_data['max_use']}")
+        
         hierarchy_data = assign_hierarchy(segment_data)
+        st.write("Debug: Hierarchy data:", hierarchy_data)
         result.append(hierarchy_data)
+    
     return result
 
 def main():
@@ -53,7 +60,19 @@ def main():
             # Create DataFrame with the specified columns
             columns = ['M/C/X', 'HL1', 'HL2', 'HL3', 'HL4', 'HL5', 'HL6', 
                       'Name', 'M/C Std', 'Max-Use', 'Note']
+            
+            # Debug: Print data before DataFrame creation
+            st.write("Debug: Data before DataFrame creation:")
+            st.write("Number of records:", len(result_data))
+            st.write("First record sample:", result_data[0] if result_data else "No data")
+            
+            # Create DataFrame and ensure all columns are present
             result_df = pd.DataFrame(result_data, columns=columns)
+            
+            # Debug: Print DataFrame info
+            st.write("Debug: DataFrame Info:")
+            st.write(f"DataFrame shape: {result_df.shape}")
+            st.write("Columns present:", list(result_df.columns))
             
             # Display preview
             st.subheader("Message Specification")
