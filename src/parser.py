@@ -1,56 +1,66 @@
 import pandas as pd
 from typing import Dict, List, Any
+import re
 
-def validate_input_file(df: pd.DataFrame) -> Dict[str, Any]:
+def read_edi_file(file_content: str) -> List[str]:
     """
-    Validates the input CSV file format and content.
+    Reads an EDI file and splits it into segments.
     """
-    required_columns = ['Segment', 'Description', 'Status']
-    
-    # Check for required columns
-    missing_columns = [col for col in required_columns if col not in df.columns]
-    if missing_columns:
-        return {
-            'valid': False,
-            'message': f"Missing required columns: {', '.join(missing_columns)}"
-        }
-    
-    # Check for empty rows
-    if df.isnull().values.any():
-        return {
-            'valid': False,
-            'message': "File contains empty cells"
-        }
-        
-    return {'valid': True, 'message': ""}
+    # Remove newlines and split by segment terminator
+    content = file_content.replace('\n', '').replace('\r', '')
+    segments = content.split("'")
+    return [s.strip() for s in segments if s.strip()]
 
-def parse_segment(row: pd.Series) -> Dict[str, Any]:
+def parse_edi_segment(segment: str) -> Dict[str, Any]:
     """
-    Parses a single segment row into structured data.
+    Parses a single EDI segment into structured data.
     """
+    # Split segment into elements (separator is typically +)
+    elements = segment.split('+')
+    segment_code = elements[0]
+    
     segment_data = {
-        'segment_code': row['Segment'],
-        'description': row['Description'],
-        'status': row['Status'],
+        'segment_code': segment_code,
+        'description': get_segment_description(segment_code),
+        'status': determine_segment_status(segment_code),
         'max_use': '1',  # Default value
-        'note': ''
+        'note': '',
+        'elements': elements[1:] if len(elements) > 1 else []
     }
     
     # Extract M/C/X status
-    if row['Status'].upper().startswith('M'):
-        segment_data['m_c_x'] = 'M'
-    elif row['Status'].upper().startswith('C'):
-        segment_data['m_c_x'] = 'C'
-    else:
-        segment_data['m_c_x'] = 'X'
+    segment_data['m_c_x'] = segment_data['status'][0].upper()
     
     return segment_data
 
+def get_segment_description(segment_code: str) -> str:
+    """
+    Returns the description for a given segment code.
+    """
+    descriptions = {
+        'UNH': 'Message Header',
+        'BGM': 'Beginning of Message',
+        'DTM': 'Date/Time/Period',
+        'NAD': 'Name and Address',
+        'LIN': 'Line Item',
+        'PIA': 'Additional Product ID',
+        'IMD': 'Item Description',
+        'QTY': 'Quantity',
+        'UNT': 'Message Trailer'
+    }
+    return descriptions.get(segment_code, 'Unknown Segment')
+
+def determine_segment_status(segment_code: str) -> str:
+    """
+    Determines if a segment is mandatory or conditional based on common EDIFACT rules.
+    """
+    mandatory_segments = {'UNH', 'BGM', 'UNT'}
+    return 'Mandatory' if segment_code in mandatory_segments else 'Conditional'
+
 def assign_hierarchy(segment_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Assigns hierarchy levels based on segment data.
+    Assigns hierarchy levels based on segment data and EDIFACT message structure.
     """
-    # Initialize hierarchy levels
     hierarchy = {
         'M/C/X': segment_data['m_c_x'],
         'HL1': '',
@@ -65,21 +75,43 @@ def assign_hierarchy(segment_data: Dict[str, Any]) -> Dict[str, Any]:
         'Note': segment_data['note']
     }
     
-    # Assign hierarchy based on segment code patterns
+    # Assign hierarchy based on EDIFACT message structure
     segment_code = segment_data['segment_code']
     
-    # Example hierarchy assignment logic
-    if segment_code.startswith('UNH'):
+    if segment_code == 'UNH':
         hierarchy['HL1'] = segment_code
-    elif segment_code.startswith('BGM'):
+    elif segment_code == 'BGM':
         hierarchy['HL1'] = 'UNH'
         hierarchy['HL2'] = segment_code
-    elif segment_code.startswith('DTM'):
+    elif segment_code in ['DTM', 'RFF']:
         hierarchy['HL1'] = 'UNH'
         hierarchy['HL2'] = 'BGM'
         hierarchy['HL3'] = segment_code
-    else:
-        # Default assignment to HL3
-        hierarchy['HL3'] = segment_code
+    elif segment_code.startswith('NAD'):
+        hierarchy['HL1'] = 'UNH'
+        hierarchy['HL2'] = 'BGM'
+        hierarchy['HL4'] = segment_code
+    elif segment_code in ['LIN', 'PIA', 'IMD', 'QTY']:
+        hierarchy['HL1'] = 'UNH'
+        hierarchy['HL5'] = 'LIN'
+        hierarchy['HL6'] = segment_code
+    elif segment_code == 'UNT':
+        hierarchy['HL1'] = 'UNH'
+        hierarchy['HL2'] = segment_code
     
     return hierarchy
+
+def parse_edi_message(content: str) -> List[Dict[str, Any]]:
+    """
+    Parses a complete EDI message and returns structured data.
+    """
+    segments = read_edi_file(content)
+    parsed_data = []
+    
+    for segment in segments:
+        if segment:  # Skip empty segments
+            segment_data = parse_edi_segment(segment)
+            hierarchy_data = assign_hierarchy(segment_data)
+            parsed_data.append(hierarchy_data)
+    
+    return parsed_data
